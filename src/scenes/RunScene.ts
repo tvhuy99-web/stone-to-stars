@@ -545,7 +545,7 @@ export class RunScene extends Phaser.Scene {
     for (const poi of this.pois) {
       if (poi.consumed || poi.obj?.active === false) continue;
       list.push({
-        label: poi.def.name + (poi.def.id === 'courier' ? ' (di chuyển)' : ''),
+        label: (poi.def.id === 'shrine' ? 'Đền thờ di vật' : poi.def.id === 'altar' ? 'Bàn thờ hợp nhất' : 'Người vận chuyển kho báu') + (poi.def.id === 'courier' ? ' (di chuyển)' : ''),
         position: () => (!poi.consumed && poi.obj?.active !== false)
           ? { x: poi.obj?.x ?? poi.x, y: poi.obj?.y ?? poi.y } : null,
       });
