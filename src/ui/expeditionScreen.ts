@@ -51,6 +51,25 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
   //     Click toggles kit membership (up to KIT_SIZE); each in-kit card has a ★ start toggle
   //     (exactly one start weapon). A small deliberate kit is a real commitment — validateKit
   //     keeps a non-empty kit at its chosen size. Below: a one-card-per-unlocked-active row. ---
+  // Accessible single-action entry: the existing Start Expedition action opens
+  // this preparation screen, but the biome-card-as-button is hard to discover in
+  // TalkBack. Keep the normal kit/biome workflow, add an explicit quick start.
+  const immediate = availableExpeditions(civ).find((exp) => exp.biomeId === 'wilds')
+    ?? availableExpeditions(civ)[0];
+  if (immediate) {
+    const quick = document.createElement('button');
+    quick.type = 'button';
+    quick.className = 'pause-btn pause-primary';
+    quick.textContent = '▶ Vào bản đồ ' + (BIOMES[immediate.biomeId]?.name ?? 'đầu tiên');
+    quick.setAttribute('aria-label',
+      'Vào bản đồ thám hiểm ' + (BIOMES[immediate.biomeId]?.name ?? 'đầu tiên')
+      + '. Bắt đầu chiến đấu và mở danh sách Điểm đến khi vào game.');
+    quick.style.cssText =
+      'display:block;width:100%;margin:10px 0 16px;padding:16px;min-height:56px;font-size:18px';
+    quick.onclick = () => cb.onPick(immediate, []);
+    wrap.appendChild(quick);
+  }
+
   const pool = unlockedWeapons(civ);
   // Normalize the persisted kit through the same gate the run uses, so the UI never shows
   // a stale/invalid kit (e.g. ids dropped by the catalog rebuild).
