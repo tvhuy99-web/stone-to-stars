@@ -41,7 +41,11 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
   root.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'exp-wrap';
-  wrap.innerHTML = '<h2>Choose an Expedition</h2>';
+  wrap.innerHTML = '<h2>Choose an Expedition</h2>' +
+    '<p role="note" style="padding:12px;border:1px solid #53785e;border-radius:8px;line-height:1.55">' +
+    'Để vào bản đồ chiến đấu, hãy kích hoạt một nút <strong>Bắt đầu thám hiểm</strong> bên dưới. ' +
+    'Sau khi vào bản đồ, nút <strong>Điểm đến</strong> sẽ xuất hiện để chọn nơi tự di chuyển.' +
+    '</p>';
 
   // --- Expedition Kit picker (RC-031): a flat always-visible grid of EVERY unlocked weapon.
   //     Click toggles kit membership (up to KIT_SIZE); each in-kit card has a ★ start toggle
@@ -170,6 +174,8 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
     const v = biome.visual;
     const card = document.createElement('button');
     card.className = 'exp-card';
+    card.type = 'button';
+    card.setAttribute('aria-label', `Bắt đầu thám hiểm tại ${biome.name}. Sau khi vào bản đồ, chọn nút Điểm đến để tự di chuyển.`);
 
     const head = document.createElement('div');
     head.className = 'exp-head';
@@ -241,6 +247,11 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
     refreshTotal();
     card.appendChild(chips);
 
+    const startHint = document.createElement('div');
+    startHint.textContent = '▶ Bắt đầu thám hiểm tại ' + biome.name;
+    startHint.setAttribute('aria-hidden', 'true');
+    startHint.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:7px;background:#166534;color:white;font-weight:700;text-align:center';
+    card.appendChild(startHint);
     card.onclick = () => cb.onPick(exp, [...sel]);
     grid.appendChild(card);
   }
