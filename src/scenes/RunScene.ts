@@ -30,6 +30,8 @@ import {
 import { playSfx } from '../audio';
 import { isTouchDevice } from '../platform/device';
 import { TouchControls } from './touchControls';
+import { findAutoRoute, Point } from '../run/autoRoute';
+import { ExploreMenu, ExploreChoice } from '../accessibility/exploreMenu';
 import { activeAimPoint, Vec2 } from './touchMath';
 import {
   orbitAngle, orbitPosition, lobFlightMs, lobProgress, lobGroundPosition, lobArcHeight, withinRadius,
@@ -138,6 +140,15 @@ export class RunScene extends Phaser.Scene {
   private keys!: Record<'up' | 'down' | 'left' | 'right', Phaser.Input.Keyboard.Key>;
   private touch?: TouchControls;
   private lastMoveDir: Vec2 = { x: 0, y: -1 };
+  private exploreMenu?: ExploreMenu;
+  private exploreMenuOpen = false;
+  private autoExplore?: {
+    choice: ExploreChoice;
+    route: Point[];
+    next: number;
+    targetAtPlan: Point;
+    planAt: number;
+  };
   // RC-043 mobile: a second, un-zoomed camera renders the screen-fixed UI while the main camera is
   // zoomed out. `pendingCam` holds newly-added objects awaiting camera classification (deferred one
   // frame because scrollFactor is set after `add`). Both stay inert off touch.
@@ -283,6 +294,8 @@ export class RunScene extends Phaser.Scene {
     this.chargesSpent = 0;
     this.lastHeavyShakeMs = -Infinity;
     this.weaponCooldowns = {};
+    this.autoExplore = undefined;
+    this.exploreMenuOpen = false;
     this.paused = false; this.pauseMenuOpen = false; this.finished = false; this.pendingComplete = null; this.pendingDrafts = 0;
     this.ceremony = false; this.ceremonyMs = 0;
     this.lobs = [];
@@ -491,6 +504,127 @@ export class RunScene extends Phaser.Scene {
     // (shrine-wave composition and jackpot rolls reuse it, so a seed reproduces its POIs end-to-end).
     this.dungeonRng = mulberry32((seed ^ 0x85ebca6b) >>> 0);
     this.placePois();
+    this.mountExploreMenu();
+  }
+
+  /** A native-HTML destination menu so TalkBack can read and activate each location. */
+  private mountExploreMenu(): void {
+    this.exploreMenu?.destroy();
+    this.exploreMenu = new ExploreMenu(
+      () => this.exploreChoices(),
+      (choice) => {
+        const pos = choice.position();
+        if (!pos) return false;
+        const route = findAutoRoute(this.layout, this.player, pos);
+        if (!route) return false;
+        this.autoExplore = { choice, route, next: 0, targetAtPlan: pos, planAt: this.elapsed };
+        return true;
+      },
+      () => this.stopAutoExplore('Đã dừng tự di chuyển.'),
+      () => !this.paused && !this.ceremony && !this.finished,
+      (open) => {
+        this.exploreMenuOpen = open;
+        if (open) {
+          this.paused = true;
+          this.physics.pause();
+        } else if (!this.pauseMenuOpen && !this.finished && !this.ceremony) {
+          this.paused = false;
+          this.physics.resume();
+        }
+      },
+    );
+    this.events.once('shutdown', () => {
+      this.exploreMenu?.destroy();
+      this.exploreMenu = undefined;
+      this.autoExplore = undefined;
+    });
+  }
+
+  private exploreChoices(): ExploreChoice[] {
+    const list: ExploreChoice[] = [];
+    for (const poi of this.pois) {
+      if (poi.consumed || poi.obj?.active === false) continue;
+      list.push({
+        label: poi.def.name + (poi.def.id === 'courier' ? ' (di chuyển)' : ''),
+        position: () => (!poi.consumed && poi.obj?.active !== false)
+          ? { x: poi.obj?.x ?? poi.x, y: poi.obj?.y ?? poi.y } : null,
+      });
+    }
+    if (this.bossEnemy?.active) {
+      list.push({
+        label: 'Trùm: ' + (ENEMIES[this.bossId]?.name ?? 'Boss'),
+        position: () => this.bossEnemy?.active
+          ? { x: this.bossEnemy.x, y: this.bossEnemy.y } : null,
+      });
+    }
+    const labels: Record<Resource, string> = {
+      exploration: 'Khám phá', science: 'Khoa học', industry: 'Công nghiệp', culture: 'Văn hóa',
+    };
+    for (const resource of Object.keys(labels) as Resource[]) {
+      const available = (this.gems.getChildren() as any[])
+        .filter(g => g.active && g.getData('resource') === resource);
+      if (!available.length) continue;
+      available.sort((a, b) =>
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y)
+        - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y));
+      const nearest = available[0];
+      list.push({
+        label: 'Tài nguyên ' + labels[resource] + ' gần nhất (' + available.length + ' điểm)',
+        position: () => nearest.active ? { x: nearest.x, y: nearest.y } : null,
+      });
+    }
+    return list;
+  }
+
+  private stopAutoExplore(message: string): void {
+    this.autoExplore = undefined;
+    this.exploreMenu?.announce(message);
+  }
+
+  /** Continue an A* route; manual input always cancels auto-walk. */
+  private updateAutoExplore(speed: number, body: Phaser.Physics.Arcade.Body): void {
+    const auto = this.autoExplore;
+    if (!auto || this.exploreMenuOpen) return;
+    if (body.velocity.length() > 1) {
+      this.stopAutoExplore('Đã chuyển về điều khiển thủ công.');
+      return;
+    }
+    const target = auto.choice.position();
+    if (!target) {
+      this.stopAutoExplore('Điểm đến đã biến mất hoặc đã được thu thập.');
+      return;
+    }
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) < 108) {
+      this.stopAutoExplore('Đã đến gần ' + auto.choice.label + '.');
+      return;
+    }
+    if (this.elapsed - auto.planAt > 1200 &&
+        Phaser.Math.Distance.Between(target.x, target.y, auto.targetAtPlan.x, auto.targetAtPlan.y) > 100) {
+      const updated = findAutoRoute(this.layout, this.player, target);
+      if (!updated) {
+        this.stopAutoExplore('Không tìm thấy đường đến mục tiêu đang di chuyển.');
+        return;
+      }
+      auto.route = updated;
+      auto.next = 0;
+      auto.targetAtPlan = target;
+      auto.planAt = this.elapsed;
+    }
+    let next = auto.route[auto.next];
+    while (next && Phaser.Math.Distance.Between(this.player.x, this.player.y, next.x, next.y) < 31) {
+      auto.next += 1;
+      next = auto.route[auto.next];
+    }
+    if (!next) {
+      this.stopAutoExplore('Đã đến vị trí gần nhất có thể đi của ' + auto.choice.label + '.');
+      return;
+    }
+    const dx = next.x - this.player.x, dy = next.y - this.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+      body.setVelocity(dx / dist * speed, dy / dist * speed);
+      this.lastMoveDir = { x: dx / dist, y: dy / dist };
+    }
   }
 
   /** RC-026: place each rolled POI in a far quadrant (best-of-N farthest open point ≥ 1.2 screen
@@ -804,6 +938,10 @@ export class RunScene extends Phaser.Scene {
         this.lastMoveDir = { x: Math.sign(b.velocity.x), y: Math.sign(b.velocity.y) };
       }
     }
+
+    // Accessibility auto-explore: use the same movement physics as manual controls.
+    // The target list is native HTML; pathfinding walks around barriers and circular props.
+    this.updateAutoExplore(speed, b);
 
     // RC-038: clamp the player every frame — a wall-collision bounce at the border can displace him
     // past the perimeter; re-seat him inside the playable field before anything reads his position.
