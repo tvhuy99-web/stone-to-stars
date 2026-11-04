@@ -33,7 +33,6 @@ const victoryEl = document.getElementById('victory')!; // RC-042 finale victory 
 let civ: CivState = remapCampTiles(load() ?? newCivState());
 
 if (isTouchDevice()) document.body.classList.add('touch');
-let pauseMenuOpen = false; // RC-043: track pause state to drive the orientation gate
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -52,16 +51,13 @@ window.addEventListener('resize', () => {
   if (runEl.classList.contains('active')) game.scale.resize(window.innerWidth, window.innerHeight);
 });
 
-// RC-043: on a touch device, rotating to portrait pauses a live run (the rotate overlay covers it).
-function handleOrientation() {
-  if (!isTouchDevice()) return;
-  const portrait = window.matchMedia('(orientation: portrait)').matches;
-  if (portrait && runEl.classList.contains('active') && !pauseMenuOpen) {
-    (game.scene.getScene('run') as RunScene).togglePauseMenu();
+// Keep the Phaser viewport responsive to both landscape and portrait on phones.
+// No forced pause: accessible target selection works in either orientation.
+window.addEventListener('orientationchange', () => {
+  if (runEl.classList.contains('active')) {
+    requestAnimationFrame(() => game.scale.resize(window.innerWidth, window.innerHeight));
   }
-}
-window.addEventListener('orientationchange', handleOrientation);
-window.addEventListener('resize', handleOrientation);
+});
 // Register the run scene WITHOUT auto-starting it. The first scene listed in the
 // Phaser config force-starts on boot (with no init data), which crashes RunScene.init;
 // adding it manually with autoStart=false keeps it dormant until startRun().
@@ -150,7 +146,7 @@ function launchExpedition(expedition: Expedition, mutators: string[] = []) {
     heroSprite: heroSpriteFor(getAge(civ)),
     onComplete: (result: RunResult) => onRunComplete(result),
     // RC-039: the scene drives the pause overlay's visibility (ESC opens/closes; abandon/finish hide).
-    onPauseMenu: (open: boolean) => { pauseMenuOpen = open; if (open) renderPauseMenu(); else hidePauseMenu(); },
+    onPauseMenu: (open: boolean) => { if (open) renderPauseMenu(); else hidePauseMenu(); },
   });
 }
 

@@ -41,12 +41,35 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
   root.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'exp-wrap';
-  wrap.innerHTML = '<h2>Choose an Expedition</h2>';
+  wrap.innerHTML = '<h2>Choose an Expedition</h2>' +
+    '<p role="note" style="padding:12px;border:1px solid #53785e;border-radius:8px;line-height:1.55">' +
+    'Bạn đang ở màn hình chuẩn bị. Nhấn nút <strong>Vào bản đồ Vùng hoang dã</strong> để bắt đầu chiến đấu. ' +
+    'Sau khi vào bản đồ, nút <strong>Điểm đến</strong> sẽ xuất hiện để chọn nơi tự di chuyển.' +
+    '</p>';
 
   // --- Expedition Kit picker (RC-031): a flat always-visible grid of EVERY unlocked weapon.
   //     Click toggles kit membership (up to KIT_SIZE); each in-kit card has a ★ start toggle
   //     (exactly one start weapon). A small deliberate kit is a real commitment — validateKit
   //     keeps a non-empty kit at its chosen size. Below: a one-card-per-unlocked-active row. ---
+  // Accessible single-action entry: the existing Start Expedition action opens
+  // this preparation screen, but the biome-card-as-button is hard to discover in
+  // TalkBack. Keep the normal kit/biome workflow, add an explicit quick start.
+  const immediate = availableExpeditions(civ).find((exp) => exp.biomeId === 'wilds')
+    ?? availableExpeditions(civ)[0];
+  if (immediate) {
+    const quick = document.createElement('button');
+    quick.type = 'button';
+    quick.className = 'pause-btn pause-primary';
+    quick.textContent = '▶ Vào bản đồ ' + (BIOMES[immediate.biomeId]?.name ?? 'đầu tiên');
+    quick.setAttribute('aria-label',
+      'Vào bản đồ thám hiểm ' + (BIOMES[immediate.biomeId]?.name ?? 'đầu tiên')
+      + '. Bắt đầu chiến đấu và mở danh sách Điểm đến khi vào game.');
+    quick.style.cssText =
+      'display:block;width:100%;margin:10px 0 16px;padding:16px;min-height:56px;font-size:18px';
+    quick.onclick = () => cb.onPick(immediate, []);
+    wrap.appendChild(quick);
+  }
+
   const pool = unlockedWeapons(civ);
   // Normalize the persisted kit through the same gate the run uses, so the UI never shows
   // a stale/invalid kit (e.g. ids dropped by the catalog rebuild).
@@ -170,6 +193,8 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
     const v = biome.visual;
     const card = document.createElement('button');
     card.className = 'exp-card';
+    card.type = 'button';
+    card.setAttribute('aria-label', `Bắt đầu thám hiểm tại ${biome.name}. Sau khi vào bản đồ, chọn nút Điểm đến để tự di chuyển.`);
 
     const head = document.createElement('div');
     head.className = 'exp-head';
@@ -241,6 +266,11 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
     refreshTotal();
     card.appendChild(chips);
 
+    const startHint = document.createElement('div');
+    startHint.textContent = '▶ Bắt đầu thám hiểm tại ' + biome.name;
+    startHint.setAttribute('aria-hidden', 'true');
+    startHint.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:7px;background:#166534;color:white;font-weight:700;text-align:center';
+    card.appendChild(startHint);
     card.onclick = () => cb.onPick(exp, [...sel]);
     grid.appendChild(card);
   }
