@@ -43,7 +43,7 @@ export function renderExpeditionScreen(root: HTMLElement, civ: CivState, cb: Exp
   wrap.className = 'exp-wrap';
   wrap.innerHTML = '<h2>Choose an Expedition</h2>' +
     '<p role="note" style="padding:12px;border:1px solid #53785e;border-radius:8px;line-height:1.55">' +
-    'Để vào bản đồ chiến đấu, hãy kích hoạt một nút <strong>Bắt đầu thám hiểm</strong> bên dưới. ' +
+    'Bạn đang ở màn hình chuẩn bị. Nhấn nút <strong>Vào bản đồ Vùng hoang dã</strong> để bắt đầu chiến đấu. ' +
     'Sau khi vào bản đồ, nút <strong>Điểm đến</strong> sẽ xuất hiện để chọn nơi tự di chuyển.' +
     '</p>';
 
