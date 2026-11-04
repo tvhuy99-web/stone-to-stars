@@ -242,15 +242,9 @@ body { margin: 0; background: #0d1117; color: #e6edf3; font-family: system-ui, s
 .cell.place-target { border-color: #3fb950; box-shadow: inset 0 0 0 2px #3fb950; cursor: pointer; }
 .bcard.armed, .cell.armed { outline: 2px solid #e3b341; outline-offset: -2px; }
 
-/* Rotate-to-landscape gate — only on touch devices, only in portrait. */
+/* Accessibility: exploration can be operated in either phone orientation.
+   In particular a small embedded preview must not hide the whole game. */
 #rotate { display: none; }
-@media (orientation: portrait) {
-  body.touch #rotate {
-    display: flex; position: fixed; inset: 0; z-index: 50;
-    flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    background: #0d1117; color: #e6edf3; text-align: center; padding: 24px;
-  }
-}
 
 /* Bigger tap targets on touch */
 body.touch button { min-height: 44px; }
